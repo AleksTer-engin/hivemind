@@ -1,0 +1,73 @@
+# Контракт сервиса hivemind-ui
+# Версия: 1.0.0
+# Статус: active
+
+service:
+  name: hivemind-ui
+  language: python
+  version: 1.0.0
+  description: "Веб-интерфейс для взаимодействия с HiveMind"
+
+team:
+  owner: "welem"
+  slack: "#hivemind-ui"
+
+business_goals:
+  - "Дать пользователю удобный доступ к возможностям HiveMind"
+  - "Визуализировать граф знаний"
+
+product_goals:
+  - "Пользователь может загружать документы через интерфейс"
+  - "Пользователь видит граф связей"
+  - "Пользователь может искать по документам"
+
+interfaces:
+  web:
+    port: 8501
+    type: streamlit
+    pages:
+      - path: "/"
+        name: "Загрузка"
+      - path: "/graph"
+        name: "Граф знаний"
+      - path: "/search"
+        name: "Поиск"
+      - path: "/status"
+        name: "Статус системы"
+
+dependencies:
+  services:
+    - name: api-gateway
+      reason: "Все запросы идут через gateway"
+  
+  libraries:
+    - streamlit==1.28.0
+    - httpx==0.25.0
+    - pandas==2.1.0
+    - plotly==5.18.0
+    - networkx==3.1 (для визуализации графа)
+
+deployment:
+  dockerfile: "../../services/hivemind-ui/Dockerfile"
+  ports:
+    - "8501:8501"
+  environment:
+    - API_GATEWAY_URL=http://api-gateway:8080
+    - NATS_URL (опционально, для прямого доступа)
+
+testing:
+  unit: false
+  e2e: true
+
+files:
+  required:
+    - path: "app.py"
+      purpose: "Точка входа Streamlit"
+    - path: "pages/graph.py"
+      purpose: "Страница с графом"
+    - path: "pages/search.py"
+      purpose: "Страница поиска"
+    - path: "utils/api_client.py"
+      purpose: "Клиент для API Gateway"
+  existing:
+    - "app.py"

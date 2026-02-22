@@ -1,0 +1,47 @@
+# Контракт события: document.classified
+# Версия: 1.0.0
+
+event:
+  topic: "document.classified"
+  version: "1.0.0"
+  description: "Документ классифицирован"
+
+payload:
+  required:
+    - document_id
+    - tags
+    - timestamp
+  properties:
+    document_id:
+      type: string
+      format: uuid
+      description: "ID документа"
+    tags:
+      type: array
+      items:
+        type: string
+      description: "Присвоенные теги"
+    confidence:
+      type: number
+      format: float
+      minimum: 0
+      maximum: 1
+      description: "Уверенность классификации"
+    model:
+      type: string
+      description: "Модель, использованная для классификации"
+    processing_time_ms:
+      type: integer
+      description: "Время обработки"
+    timestamp:
+      type: string
+      format: date-time
+      description: "Время события"
+
+example:
+  document_id: "123e4567-e89b-12d3-a456-426614174000"
+  tags: ["AI", "healthcare", "research"]
+  confidence: 0.95
+  model: "multilingual-bert"
+  processing_time_ms: 150
+  timestamp: "2026-02-22T15:30:00Z"

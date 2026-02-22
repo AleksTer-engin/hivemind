@@ -1,0 +1,39 @@
+# Контракт: получение документа
+# Метод: GET /api/v1/documents/{id}
+
+parameters:
+  - name: id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+
+response:
+  status: 200
+  body:
+    properties:
+      id:
+        type: string
+        format: uuid
+      content:
+        type: string
+      metadata:
+        type: object
+      embeddings:
+        type: array
+        items:
+          type: string
+          format: uuid
+      links:
+        type: array
+        items:
+          type: string
+          format: uuid
+      created_at:
+        type: string
+        format: date-time
+
+errors:
+  404:
+    description: "Документ не найден"

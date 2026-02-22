@@ -1,0 +1,113 @@
+# Контракт сервиса classifier
+# Версия: 1.0.0
+# Статус: active
+
+service:
+  name: classifier
+  language: python
+  version: 1.0.0
+  description: "Классификация текстов, определение тегов"
+
+team:
+  owner: "welem"
+  slack: "#hivemind-ml"
+
+business_goals:
+  - "Автоматически категоризировать входящую информацию"
+  - "Уменьшить ручную работу по тегированию"
+
+product_goals:
+  - "Пользователь получает автоматические теги для документов"
+  - "Можно искать по тегам"
+
+inputs:
+  - name: text
+    type: string
+    description: "Текст для классификации"
+    required: true
+    example: "Искусственный интеллект в медицине"
+  
+  - name: model
+    type: string
+    description: "Модель для классификации"
+    required: false
+    default: "default"
+    options: ["default", "multilingual", "custom"]
+
+outputs:
+  - name: tags
+    type: array
+    items: string
+    description: "Определённые теги"
+    example: ["AI", "healthcare", "research"]
+  
+  - name: confidence
+    type: float
+    description: "Уверенность классификации (0-1)"
+    example: 0.95
+  
+  - name: processing_time_ms
+    type: integer
+    description: "Время обработки в миллисекундах"
+
+events:
+  subscribes:
+    - topic: "document.ingest"
+      description: "Новый документ для классификации"
+  
+  publishes:
+    - topic: "document.classified"
+      description: "Документ классифицирован"
+      contract_ref: "../events/document-classified.yaml"
+
+dependencies:
+  libraries:
+    - transformers==4.35.0
+    - torch==2.1.0
+    - fastapi
+    - nats-py
+  
+  services: []
+  
+  infrastructure:
+    - nats (для получения/отправки событий)
+    - postgres (для сохранения результатов)
+
+deployment:
+  dockerfile: "../../services/classifier/Dockerfile"
+  ports:
+    - "8081:8080"  # внутренний порт для debug
+  environment:
+    - MODEL_NAME=all-MiniLM-L6-v2
+    - NATS_URL
+    - DATABASE_URL
+    - BATCH_SIZE=32
+  replicas: 2
+  resources:
+    cpu: "1.0"
+    memory: "2Gi"
+    gpu: optional
+
+testing:
+  unit: true
+  integration: true
+  model_accuracy: "> 0.85"
+
+files:
+  required:
+    - path: "src/main.py"
+      purpose: "Точка входа"
+    - path: "src/models/classifier.py"
+      purpose: "Логика классификации"
+    - path: "Dockerfile"
+      purpose: "Контейнеризация"
+  missing:
+    - "tests/test_accuracy.py"
+
+issues:
+  known:
+    - "Медленная загрузка моделей при старте"
+  
+  todo:
+    - "Добавить кэширование моделей"
+    - "Оптимизировать для GPU"

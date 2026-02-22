@@ -1,0 +1,116 @@
+# Контракт сервиса linker
+# Версия: 0.1.0
+# Статус: planned
+
+service:
+  name: linker
+  language: go  # для производительности при обходе графа
+  version: 0.1.0
+  description: "Установление связей между документами на основе эмбеддингов и метаданных"
+
+team:
+  owner: "welem"
+  slack: "#hivemind-core"
+
+business_goals:
+  - "Создать сеть знаний, где идеи связаны естественным образом"
+  - "Обнаруживать неочевидные связи между документами"
+
+product_goals:
+  - "Пользователь видит, как связаны его заметки"
+  - "Можно навигировать по графу знаний"
+  - "Система предлагает связанные документы"
+
+inputs:
+  - name: document_id
+    type: string
+    description: "ID документа для линковки"
+    required: true
+  
+  - name: embedding_id
+    type: string
+    description: "ID эмбеддинга (опционально)"
+    required: false
+  
+  - name: threshold
+    type: float
+    description: "Порог сходства для создания связи (0-1)"
+    required: false
+    default: 0.7
+
+outputs:
+  - name: links
+    type: array
+    items:
+      type: object
+      properties:
+        target_id: string
+        similarity: float
+        link_type: string  # "similar", "references", "opposite"
+    description: "Найденные связи"
+
+events:
+  subscribes:
+    - topic: "document.embedded"
+      description: "Новый эмбеддинг для линковки"
+  
+  publishes:
+    - topic: "document.linked"
+      description: "Связи созданы"
+      contract_ref: "../events/document-linked.yaml"
+
+dependencies:
+  libraries:
+    - github.com/neo4j/neo4j-go-driver/v5
+    - github.com/nats-io/nats.go
+  
+  services: []
+  
+  infrastructure:
+    - nats
+    - neo4j (графовая БД)
+    - qdrant (для поиска похожих векторов)
+
+deployment:
+  dockerfile: "../../services/linker/Dockerfile"
+  environment:
+    - NATS_URL
+    - NEO4J_URL
+    - QDRANT_URL
+    - SIMILARITY_THRESHOLD=0.7
+    - MAX_LINKS_PER_DOC=100
+  resources:
+    cpu: "1.0"
+    memory: "2Gi"
+
+testing:
+  unit: false
+  integration: false
+  performance_target: "1000 документов/сек"
+
+algorithms:
+  similarity:
+    - "косинусная близость для векторов"
+    - "Jaccard для тегов"
+  graph:
+    - "поиск в ширину для связанных документов"
+    - "PageRank для важности"
+
+files:
+  required:
+    - path: "cmd/linker/main.go"
+      purpose: "Точка входа (TODO)"
+    - path: "internal/linker/linker.go"
+      purpose: "Основная логика (TODO)"
+    - path: "internal/store/neo4j.go"
+      purpose: "Работа с графовой БД (TODO)"
+    - path: "Dockerfile"
+      purpose: "Контейнеризация (TODO)"
+  existing: []
+
+issues:
+  todo:
+    - "Выбрать алгоритм поиска похожих векторов"
+    - "Определить типы связей"
+    - "Решить, как обновлять связи при добавлении новых документов"
+    - "Оптимизировать запросы к Neo4j"

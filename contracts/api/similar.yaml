@@ -1,0 +1,45 @@
+# Контракт: поиск похожих документов
+# Метод: GET /api/v1/documents/{id}/similar
+
+parameters:
+  - name: id
+    in: path
+    required: true
+    schema:
+      type: string
+      format: uuid
+  - name: limit
+    in: query
+    schema:
+      type: integer
+      default: 10
+      maximum: 100
+  - name: threshold
+    in: query
+    schema:
+      type: number
+      format: float
+      default: 0.7
+      minimum: 0
+      maximum: 1
+
+response:
+  status: 200
+  body:
+    properties:
+      documents:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uuid
+            similarity:
+              type: number
+              format: float
+            content:
+              type: string
+              description: "Текст (обрезанный для экономии)"
+      total:
+        type: integer

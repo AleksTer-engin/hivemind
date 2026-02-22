@@ -1,0 +1,15 @@
+
+Астролябия
+/docs/*.tmp
+/hivemind-analysis.json
+
+IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+Логи
+*.log
+logs/

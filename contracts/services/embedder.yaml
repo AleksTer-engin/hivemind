@@ -1,0 +1,103 @@
+# Контракт сервиса embedder
+# Версия: 0.1.0
+# Статус: planned
+
+service:
+  name: embedder
+  language: python  # или go?
+  version: 0.1.0
+  description: "Создание векторных эмбеддингов для текстов"
+
+team:
+  owner: "welem"
+  slack: "#hivemind-ml"
+
+business_goals:
+  - "Обеспечить семантический поиск по документам"
+  - "Находить похожие идеи независимо от формулировки"
+
+product_goals:
+  - "Пользователь может искать по смыслу, а не по ключевым словам"
+  - "Система автоматически связывает похожие документы"
+
+inputs:
+  - name: text
+    type: string
+    description: "Текст для создания эмбеддинга"
+    required: true
+  
+  - name: model
+    type: string
+    description: "Модель эмбеддинга"
+    required: false
+    default: "sentence-transformers/all-MiniLM-L6-v2"
+
+outputs:
+  - name: embedding
+    type: array
+    items: float
+    description: "Векторное представление"
+    length: 384  # для MiniLM
+  
+  - name: model
+    type: string
+    description: "Использованная модель"
+  
+  - name: dimension
+    type: integer
+    description: "Размерность вектора"
+
+events:
+  subscribes:
+    - topic: "document.classified"
+      description: "Классифицированный документ для эмбеддинга"
+  
+  publishes:
+    - topic: "document.embedded"
+      description: "Эмбеддинг создан"
+      contract_ref: "../events/document-embedded.yaml"
+
+dependencies:
+  libraries:
+    - sentence-transformers
+    - torch
+    - numpy
+    - nats-py
+  
+  infrastructure:
+    - nats
+    - qdrant (для хранения эмбеддингов)
+
+deployment:
+  dockerfile: "../../services/embedder/Dockerfile"
+  environment:
+    - MODEL_NAME=sentence-transformers/all-MiniLM-L6-v2
+    - NATS_URL
+    - QDRANT_URL
+    - BATCH_SIZE=64
+  resources:
+    cpu: "2.0"
+    memory: "4Gi"
+    gpu: recommended
+
+testing:
+  unit: false
+  integration: false
+  accuracy_target: "> 0.9 на тестовом наборе"
+
+files:
+  required:
+    - path: "src/main.py"
+      purpose: "Точка входа (TODO)"
+    - path: "src/embedder.py"
+      purpose: "Логика создания эмбеддингов (TODO)"
+    - path: "Dockerfile"
+      purpose: "Контейнеризация (TODO)"
+  existing: []
+
+issues:
+  todo:
+    - "Выбрать язык (Python с transformers или Go с готовыми моделями)"
+    - "Определить размерность эмбеддингов"
+    - "Решить, хранить ли эмбеддинги в Qdrant или отдельно"
+    - "Написать тесты на качество"

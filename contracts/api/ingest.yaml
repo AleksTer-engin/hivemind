@@ -1,0 +1,49 @@
+# Контракт: загрузка документа
+# Метод: POST /api/v1/documents
+
+request:
+  body:
+    required:
+      - content
+    properties:
+      content:
+        type: string
+        description: "Текст документа"
+        example: "Искусственный интеллект в медицине"
+      metadata:
+        type: object
+        description: "Метаданные документа"
+        properties:
+          source:
+            type: string
+            example: "web"
+          tags:
+            type: array
+            items: string
+            example: ["AI", "draft"]
+
+response:
+  status: 202
+  body:
+    properties:
+      id:
+        type: string
+        format: uuid
+        description: "ID созданного документа"
+      status:
+        type: string
+        enum: ["processing"]
+      task_id:
+        type: string
+        format: uuid
+        description: "ID задачи для отслеживания"
+
+errors:
+  400:
+    description: "Неверный запрос (нет content)"
+  413:
+    description: "Слишком большой документ"
+  429:
+    description: "Слишком много запросов"
+  503:
+    description: "Сервис временно недоступен"

@@ -1,0 +1,107 @@
+# Контракт сервиса api-gateway
+# Версия: 1.0.0
+# Статус: active
+
+service:
+  name: api-gateway
+  language: go
+  version: 1.0.0
+  description: "Входная точка API, маршрутизация запросов к сервисам"
+
+team:
+  owner: "welem"
+  slack: "#hivemind-gateway"
+
+business_goals:
+  - "Обеспечить единую точку входа для всех клиентов"
+  - "Скрыть внутреннюю структуру микросервисов"
+  - "Собирать метрики использования"
+
+product_goals:
+  - "Пользователь может загружать документы через API"
+  - "Пользователь может искать похожие документы"
+  - "Пользователь может видеть граф связей"
+
+interfaces:
+  rest:
+    port: 8080
+    endpoints:
+      - path: /api/v1/documents
+        method: POST
+        description: "Загрузить документ"
+        contract_ref: "../api/ingest.yaml"
+      
+      - path: /api/v1/documents/{id}
+        method: GET
+        description: "Получить документ"
+        contract_ref: "../api/get-document.yaml"
+      
+      - path: /api/v1/documents/{id}/similar
+        method: GET
+        description: "Найти похожие"
+        contract_ref: "../api/similar.yaml"
+      
+      - path: /api/v1/graph/{id}
+        method: GET
+        description: "Получить граф связей"
+        contract_ref: "../api/graph.yaml"
+      
+      - path: /api/v1/status
+        method: GET
+        description: "Статус системы"
+        contract_ref: "../api/status.yaml"
+
+events:
+  publishes:
+    - topic: "document.ingest"
+      description: "Новый документ для обработки"
+      contract_ref: "../events/document-ingest.yaml"
+  
+  subscribes: []
+
+dependencies:
+  services:
+    - name: classifier
+      reason: "Для классификации документов"
+    - name: embedder
+      reason: "Для создания эмбеддингов"
+    - name: linker
+      reason: "Для установления связей"
+  
+  infrastructure:
+    - nats (для публикации событий)
+    - redis (для кэширования)
+
+deployment:
+  dockerfile: "../../services/api-gateway/Dockerfile"
+  ports:
+    - "8080:8080"
+  environment:
+    - NATS_URL
+    - REDIS_URL
+    - LOG_LEVEL
+  healthcheck:
+    command: "curl -f http://localhost:8080/health || exit 1"
+    interval: "30s"
+    timeout: "10s"
+    retries: 3
+
+testing:
+  unit: true
+  integration: true
+  e2e: true
+  performance_target: "1000 rps"
+
+monitoring:
+  metrics: "/metrics"
+  logs: "stdout"
+  tracing: "jaeger"
+
+issues:
+  known:
+    - "Нет rate limiting"
+    - "Нет аутентификации"
+  
+  todo:
+    - "Добавить OpenAPI spec"
+    - "Добавить request-id для трейсинга"
