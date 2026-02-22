@@ -1,0 +1,7 @@
+2026-02-18 19:38:36 | УСТАНОВЛЕНО | git | fast, scalable, distributed revision control system
+2026-02-18 19:39:46 | УСТАНОВЛЕНО | go (snap 1.25.6) | Go programming language - compiler and tools
+2026-02-18 20:12:38 | УСТАНОВЛЕНО | manual | poetry (pipx) | Установлен глобально через pipx
+2026-02-18 20:12:38 | УСТАНОВЛЕНО | manual | classifier (poetry) | Виртуальная среда в .cache/pypoetry
+# HiveMind проект
+2026-02-18 20:21:13 | УСТАНОВЛЕНО | проект | hivemind | Микросервисная система с NATS, Qdrant, Neo4j
+2026-02-18 20:21:13 | УСТАНОВЛЕНО | python | classifier | Poetry-проект в hivemind/services/classifier

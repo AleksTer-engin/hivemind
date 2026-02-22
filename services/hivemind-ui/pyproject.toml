@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "hivemind-ui"
+version = "0.1.0"
+description = "HiveMind Web Interface"
+authors = ["welem <welem@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.12"
+dash = "^2.18"
+plotly = "^6.0"
+nats-py = "^2.13"
+neo4j = "^5.26"
+requests = "^2.32"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

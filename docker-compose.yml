@@ -1,0 +1,195 @@
+
+
+networks:
+  hivemind-net:
+    driver: bridge
+
+volumes:
+  postgres-data:
+  qdrant-data:
+  neo4j-data:
+  redis-data:
+
+services:
+  nats:
+    image: nats:latest
+    command: ["-js", "-m", "8222"]
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    networks:
+      - hivemind-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "http://localhost:8222/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - hivemind-net
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  postgres:
+    image: pgvector/pgvector:pg15
+    environment:
+      POSTGRES_DB: hivemind
+      POSTGRES_USER: hivemind
+      POSTGRES_PASSWORD: hivemind
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - hivemind-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hivemind"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    networks:
+      - hivemind-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  neo4j:
+    image: neo4j:5-enterprise
+    environment:
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"  # <-- ДОБАВЬ ЭТУ СТРОКУ
+      NEO4J_AUTH: neo4j/hivemind
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+      NEO4J_dbms_security_procedures_unrestricted: 'apoc.*,gds.*'
+      NEO4J_dbms_vector_enabled: 'true'
+      # Правильные имена переменных для Neo4j 5
+      NEO4J_server_memory_heap_initial__size: '2G'    # было heap_max_size
+      NEO4J_server_memory_heap_max__size: '2G'        # было heap_max_size
+      NEO4J_server_memory_pagecache_size: '1G'
+      # Отключаем строгую проверку конфига, чтобы не ругался
+      NEO4J_server_config_strict__validation_enabled: 'false'
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - neo4j-data:/data
+    networks:
+      - hivemind-net
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "hivemind", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ----- Go-сервисы (лёгкие) -----
+  api-gateway:
+    build:
+      context: ./services/api-gateway
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      NATS_URL: nats://nats:4222
+      REDIS_URL: redis:6379
+      POSTGRES_URL: postgresql://hivemind:hivemind@postgres:5432/hivemind
+#    depends_on:
+#      nats:
+#        condition: service_healthy
+#      redis:
+#        condition: service_healthy
+#      postgres:
+#        condition: service_healthy
+    networks:
+      - hivemind-net
+    restart: unless-stopped
+
+  # ----- Python-сервисы (тяжёлые) -----
+  classifier:
+    build:
+      context: ./services/classifier
+      dockerfile: Dockerfile
+    environment:
+      NATS_URL: nats://nats:4222
+    depends_on:
+      nats:
+        condition: service_healthy
+    networks:
+      - hivemind-net
+    restart: unless-stopped
+
+  embedder:
+    build:
+      context: ./services/embedder
+      dockerfile: Dockerfile
+    environment:
+      NATS_URL: nats://nats:4222
+      QDRANT_URL: http://qdrant:6333
+    depends_on:
+      nats:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - hivemind-net
+    restart: unless-stopped
+
+  linker:
+    build:
+      context: ./services/linker
+      dockerfile: Dockerfile
+    environment:
+      NATS_URL: nats://nats:4222
+      NEO4J_URL: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: hivemind
+      QDRANT_URL: http://qdrant:6333
+    depends_on:
+      nats:
+        condition: service_healthy
+      neo4j:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    networks:
+      - hivemind-net
+    restart: unless-stopped
+
+  hivemind-ui:
+    build:
+      context: ./services/hivemind-ui
+      dockerfile: Dockerfile
+    ports:
+      - "8050:8050"
+    environment:
+      NATS_URL: nats://nats:4222
+      NEO4J_URL: bolt://neo4j:7687
+    depends_on:
+      nats:
+        condition: service_started
+      neo4j:
+        condition: service_healthy
+    networks:
+      - hivemind-net
+    restart: unless-stopped
