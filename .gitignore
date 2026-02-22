@@ -13,3 +13,11 @@ IDE
 Логи
 *.log
 logs/
+
+Контракты (исключаем временные файлы)
+contracts/.tmp
+contracts/.swp
+
+Контракты (исключаем временные файлы)
+contracts/.tmp
+contracts/.swp
