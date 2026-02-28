@@ -13,17 +13,18 @@ volumes:
 services:
   nats:
     image: nats:latest
-    command: ["-js", "-m", "8222"]
+    command: ["-js", "-m", "8222", "--max_payload=8388608"]  # 8MB
     ports:
       - "4222:4222"
       - "8222:8222"
     networks:
       - hivemind-net
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:8222/healthz"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8222/healthz"]
       interval: 30s
-      timeout: 5s
+      timeout: 10s
       retries: 3
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -131,10 +132,12 @@ services:
       context: ./services/classifier
       dockerfile: Dockerfile
     environment:
-      NATS_URL: nats://nats:4222
-    depends_on:
-      nats:
-        condition: service_healthy
+      - NATS_URL=nats://nats:4222
+      - OLLAMA_URL=http://host.docker.internal:11434/api/generate
+      - DATABASE_URL=postgresql://hivemind:hivemind@postgres:5432/hivemind
+#    depends_on:
+#     nats:
+#        condition: service_healthy
     networks:
       - hivemind-net
     restart: unless-stopped
@@ -146,11 +149,11 @@ services:
     environment:
       NATS_URL: nats://nats:4222
       QDRANT_URL: http://qdrant:6333
-    depends_on:
-      nats:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
+#    depends_on:
+#      nats:
+#        condition: service_healthy
+#      qdrant:
+#        condition: service_healthy
     networks:
       - hivemind-net
     restart: unless-stopped
@@ -165,13 +168,13 @@ services:
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: hivemind
       QDRANT_URL: http://qdrant:6333
-    depends_on:
-      nats:
-        condition: service_healthy
-      neo4j:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
+#    depends_on:
+#      nats:
+#        condition: service_healthy
+#      neo4j:
+#        condition: service_healthy
+#      qdrant:
+#        condition: service_healthy
     networks:
       - hivemind-net
     restart: unless-stopped

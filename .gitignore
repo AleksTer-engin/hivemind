@@ -21,3 +21,8 @@ contracts/.swp
 Контракты (исключаем временные файлы)
 contracts/.tmp
 contracts/.swp
+*.log
+*.pyc
+__pycache__/
+.env
+tools/__pycache__/
