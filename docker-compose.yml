@@ -13,7 +13,7 @@ volumes:
 services:
   nats:
     image: nats:latest
-    command: ["-js", "-m", "8222", "--max_payload=8388608"]  # 8MB
+    command: ["-js", "-m", "8222"]  
     ports:
       - "4222:4222"
       - "8222:8222"
@@ -193,6 +193,22 @@ services:
         condition: service_started
       neo4j:
         condition: service_healthy
+    networks:
+      - hivemind-net
+    restart: unless-stopped
+
+  file-service:
+    build: ./services/go/file-service
+    ports:
+      - "8081:8081"
+    volumes:
+      - ~/data:/app/data  # монтируем твою библиотеку
+    environment:
+      - NATS_URL=nats://nats:4222
+      - STORAGE_PATH=/app/data
+    depends_on:
+      nats:
+        condition: service_started  # или service_healthy
     networks:
       - hivemind-net
     restart: unless-stopped

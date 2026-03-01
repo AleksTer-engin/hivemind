@@ -1,0 +1,11 @@
+server:
+  port: 8081
+
+nats:
+  url: "nats://nats:4222"
+
+storage:
+  path: "/app/data"  # будет монтироваться ~/data сюда
+
+logging:
+  level: "info"
