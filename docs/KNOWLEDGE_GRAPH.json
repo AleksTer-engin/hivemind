@@ -1,29 +1,103 @@
 {
-"version": "1.0",
-"generated": "2026-02-22",
-"nodes": [
-{"id": "api-gateway", "type": "service", "language": "go", "status": "active"},
-{"id": "classifier", "type": "service", "language": "python", "status": "active"},
-{"id": "embedder", "type": "service", "language": "unknown", "status": "planned"},
-{"id": "linker", "type": "service", "language": "unknown", "status": "planned"},
-{"id": "hivemind-ui", "type": "service", "language": "python", "status": "active"},
-{"id": "nats", "type": "infrastructure", "purpose": "message-bus"},
-{"id": "postgres", "type": "database", "purpose": "relational"},
-{"id": "neo4j", "type": "database", "purpose": "graph"},
-{"id": "qdrant", "type": "database", "purpose": "vector"},
-{"id": "redis", "type": "infrastructure", "purpose": "cache-queue"}
-],
-"edges": [
-{"from": "api-gateway", "to": "nats", "type": "publishes"},
-{"from": "classifier", "to": "nats", "type": "subscribes"},
-{"from": "classifier", "to": "nats", "type": "publishes"},
-{"from": "embedder", "to": "nats", "type": "subscribes"},
-{"from": "embedder", "to": "nats", "type": "publishes"},
-{"from": "linker", "to": "nats", "type": "subscribes"},
-{"from": "linker", "to": "nats", "type": "publishes"},
-{"from": "classifier", "to": "postgres", "type": "writes"},
-{"from": "embedder", "to": "qdrant", "type": "writes"},
-{"from": "linker", "to": "neo4j", "type": "writes"},
-{"from": "hivemind-ui", "to": "api-gateway", "type": "calls"}
-]
+  "version": "1.0",
+  "generated": "2026-03-01 15:49:58",
+  "nodes": [
+    {
+      "id": "api-gateway",
+      "type": "service",
+      "language": "go",
+      "status": "active"
+    },
+    {
+      "id": "classifier",
+      "type": "service",
+      "language": "python",
+      "status": "active"
+    },
+    {
+      "id": "embedder",
+      "type": "service",
+      "language": "python",
+      "status": "active"
+    },
+    {
+      "id": "hivemind-ui",
+      "type": "service",
+      "language": "python",
+      "status": "active"
+    },
+    {
+      "id": "linker",
+      "type": "service",
+      "language": "go",
+      "status": "active"
+    },
+    {
+      "id": "nats",
+      "type": "infrastructure"
+    },
+    {
+      "id": "postgres",
+      "type": "infrastructure"
+    },
+    {
+      "id": "neo4j",
+      "type": "infrastructure"
+    },
+    {
+      "id": "qdrant",
+      "type": "infrastructure"
+    },
+    {
+      "id": "redis",
+      "type": "infrastructure"
+    }
+  ],
+  "edges": [
+    {
+      "from": "api-gateway",
+      "to": "nats",
+      "type": "uses"
+    },
+    {
+      "from": "classifier",
+      "to": "nats",
+      "type": "uses"
+    },
+    {
+      "from": "embedder",
+      "to": "nats",
+      "type": "uses"
+    },
+    {
+      "from": "hivemind-ui",
+      "to": "nats",
+      "type": "uses"
+    },
+    {
+      "from": "linker",
+      "to": "nats",
+      "type": "uses"
+    },
+    {
+      "from": "api-gateway",
+      "to": "nats",
+      "type": "publishes"
+    },
+    {
+      "from": "classifier",
+      "to": "postgres",
+      "type": "writes"
+    },
+    {
+      "from": "embedder",
+      "to": "qdrant",
+      "type": "writes"
+    },
+    {
+      "from": "linker",
+      "to": "neo4j",
+      "type": "writes"
+    }
+  ]
 }

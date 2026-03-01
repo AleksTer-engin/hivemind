@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 AI Assistant with Hands and Laboratory
-- Полноценный ИИ-ассистент с доступом к файловой системе
+- Полноценный ИИ-ассистент с доступом к файловой системе через file-service
 - Поддержка команд и естественного языка
 - Интеграция с локальной LLM (qwen3:8b)
 - Лаборатория для сборки, диагностики и интеграции
+- Работа с библиотекой ~/data через file-service
 """
 
 import os
@@ -25,6 +26,9 @@ class AIAssistant:
         self.context = []
         self.project_dir.mkdir(exist_ok=True)
         
+        # URL для file-service
+        self.file_service_url = "http://localhost:8081/api/v1/files"
+        
         # Инициализация памяти/RAG
         self.memory_file = self.work_dir / "memory.json"
         self.load_memory()
@@ -36,49 +40,86 @@ class AIAssistant:
         print(f"ИИ-ассистент с руками и лабораторией запущен")
         print(f"Проект: {self.project_dir}")
         print(f"Онтология: {list(self.ontology.keys()) if self.ontology else 'не загружена'}")
+        print(f"File-service: {self.file_service_url}")
         print(f"Команды: /help - справка, /lab - лаборатория")
     
     @property
     def work_dir(self):
         return self.project_dir
     
+    # ==================== FILE-SERVICE КЛИЕНТ ====================
+    
+    def call_file_service(self, action, data):
+        """Вызвать file-service через HTTP"""
+        try:
+            response = requests.post(
+                f"{self.file_service_url}/{action}",
+                json=data,
+                timeout=5
+            )
+            if response.status_code == 200:
+                return response.json()
+            elif response.status_code == 204:
+                return {"success": True}
+            else:
+                return {"error": f"HTTP {response.status_code}: {response.text}"}
+        except requests.exceptions.ConnectionError:
+            return {"error": "Не удалось подключиться к file-service. Запущен ли он?"}
+        except Exception as e:
+            return {"error": str(e)}
+    
     # ==================== ОНТОЛОГИЯ ====================
     
     def load_ontology(self):
-        """Загрузить YAML-файлы онтологии из astro/ontology"""
+        """Загрузить YAML-файлы онтологии из astro/ontology через file-service"""
         import yaml
         
-        # Ищем astro/ontology в home или в project_dir
-        possible_paths = [
-            Path.home() / "astro" / "ontology",
-            self.project_dir / "astro" / "ontology",
-            self.project_dir.parent / "astro" / "ontology"
-        ]
+        # Пробуем загрузить через file-service
+        result = self.call_file_service("list", {"path": "astro/ontology"})
+        if "error" not in result:
+            for item in result:
+                if item['name'].endswith('.yaml'):
+                    file_result = self.call_file_service("read", {"path": f"astro/ontology/{item['name']}"})
+                    if "error" not in file_result:
+                        try:
+                            name = item['name'].replace('.yaml', '')
+                            self.ontology[name] = yaml.safe_load(file_result['content'])
+                            print(f"  - загружен {item['name']}")
+                        except Exception as e:
+                            print(f"  ⚠️ Ошибка загрузки {item['name']}: {e}")
         
-        for ontology_dir in possible_paths:
-            if ontology_dir.exists():
-                print(f"📚 Загрузка онтологии из {ontology_dir}")
-                for yaml_file in ontology_dir.glob("*.yaml"):
-                    try:
-                        with open(yaml_file, 'r', encoding='utf-8') as f:
-                            name = yaml_file.stem
-                            self.ontology[name] = yaml.safe_load(f)
-                            print(f"  - загружен {name}.yaml")
-                    except Exception as e:
-                        print(f"  ⚠️ Ошибка загрузки {yaml_file.name}: {e}")
-                
-                # Загрузить маппинги
-                mappings_dir = ontology_dir / "mappings"
-                if mappings_dir.exists():
-                    for yaml_file in mappings_dir.glob("*.yaml"):
+        # Если не нашли через file-service, ищем локально
+        if not self.ontology:
+            possible_paths = [
+                Path.home() / "astro" / "ontology",
+                self.project_dir / "astro" / "ontology",
+                self.project_dir.parent / "astro" / "ontology"
+            ]
+            
+            for ontology_dir in possible_paths:
+                if ontology_dir.exists():
+                    print(f"📚 Загрузка онтологии из {ontology_dir} (локально)")
+                    for yaml_file in ontology_dir.glob("*.yaml"):
                         try:
                             with open(yaml_file, 'r', encoding='utf-8') as f:
-                                name = f"mapping_{yaml_file.stem}"
+                                name = yaml_file.stem
                                 self.ontology[name] = yaml.safe_load(f)
-                                print(f"  - загружен mappings/{yaml_file.name}")
+                                print(f"  - загружен {name}.yaml")
                         except Exception as e:
-                            print(f"  ⚠️ Ошибка загрузки mappings/{yaml_file.name}: {e}")
-                break
+                            print(f"  ⚠️ Ошибка загрузки {yaml_file.name}: {e}")
+                    
+                    # Загрузить маппинги
+                    mappings_dir = ontology_dir / "mappings"
+                    if mappings_dir.exists():
+                        for yaml_file in mappings_dir.glob("*.yaml"):
+                            try:
+                                with open(yaml_file, 'r', encoding='utf-8') as f:
+                                    name = f"mapping_{yaml_file.stem}"
+                                    self.ontology[name] = yaml.safe_load(f)
+                                    print(f"  - загружен mappings/{yaml_file.name}")
+                            except Exception as e:
+                                print(f"  ⚠️ Ошибка загрузки mappings/{yaml_file.name}: {e}")
+                    break
         
         if not self.ontology:
             print("⚠️ Онтология не найдена. Работа без неё.")
@@ -198,107 +239,105 @@ class AIAssistant:
         except Exception as e:
             return f"Ошибка: {e}"
     
-    # ==================== РАБОТА С ФАЙЛАМИ ====================
+    # ==================== РАБОТА С ФАЙЛАМИ (через file-service) ====================
     
     def read_file(self, filepath):
-        """Прочитать файл из проекта"""
-        full_path = self.work_dir / filepath
-        if full_path.exists():
-            if full_path.is_file():
-                return full_path.read_text(encoding='utf-8')
-            else:
-                return f"{filepath} — это папка"
-        return f"Файл {filepath} не найден"
+        """Прочитать файл через file-service"""
+        result = self.call_file_service("read", {"path": filepath})
+        if "error" in result:
+            return f"Ошибка: {result['error']}"
+        if "content" in result:
+            return result["content"]
+        return str(result)
     
-    def write_file(self, filepath, content):
-        """Записать файл в проект"""
-        full_path = self.work_dir / filepath
-        full_path.parent.mkdir(parents=True, exist_ok=True)
-        full_path.write_text(content, encoding='utf-8')
+    def write_file(self, filepath, content, overwrite=True):
+        """Записать файл через file-service"""
+        result = self.call_file_service("write", {
+            "path": filepath,
+            "content": content,
+            "overwrite": overwrite
+        })
+        if "error" in result:
+            return f"Ошибка: {result['error']}"
         return f"Файл {filepath} записан ({len(content)} символов)"
     
     def list_files(self, path="."):
-        """Показать файлы в директории"""
-        full_path = self.work_dir / path
-        if not full_path.exists():
-            return f"Путь {path} не найден"
+        """Показать файлы через file-service"""
+        result = self.call_file_service("list", {"path": path})
+        if "error" in result:
+            return f"Ошибка: {result['error']}"
         
-        if full_path.is_file():
-            return f"{path} — это файл"
+        if not result:
+            return f"Путь {path} пуст или не существует"
         
-        files = []
-        for f in sorted(full_path.iterdir()):
-            size = f.stat().st_size if f.is_file() else 0
-            modified = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-            type_char = "📄" if f.is_file() else "📁"
-            files.append(f"{type_char} {f.name}  ({size} bytes)  [{modified}]")
+        lines = []
+        for item in result:
+            type_char = "📄" if not item['is_dir'] else "📁"
+            size = item.get('size', 0)
+            modified = item.get('modified', '')[:10]
+            lines.append(f"{type_char} {item['name']}  ({size} bytes)  [{modified}]")
         
-        return "\n".join(files)
+        return "\n".join(lines)
+    
+    def delete_file(self, filepath, force=False):
+        """Удалить файл через file-service"""
+        result = self.call_file_service("delete", {
+            "path": filepath,
+            "force": force
+        })
+        if "error" in result:
+            return f"Ошибка: {result['error']}"
+        return f"✅ {filepath} удалён"
+    
+    def move_file(self, source, dest):
+        """Переместить файл через file-service"""
+        result = self.call_file_service("move", {
+            "source": source,
+            "dest": dest
+        })
+        if "error" in result:
+            return f"Ошибка: {result['error']}"
+        return f"✅ {source} → {dest}"
     
     def handle_file_request(self, path):
         """Обработать запрос на просмотр файлов/папок"""
-        target = Path(path).expanduser()
-        if not target.exists():
-            return f"Путь {path} не существует"
+        result = self.call_file_service("list", {"path": path})
+        if "error" in result:
+            # Попробуем прочитать как файл
+            content = self.read_file(path)
+            if content.startswith("Ошибка"):
+                return f"❌ {path}: {content}"
+            return f"\n📄 {path}:\n{'-'*50}\n{content}\n{'-'*50}"
         
-        if target.is_dir():
-            result = f"\n📁 {path}:\n"
-            files = list(target.glob("*"))
-            for i, f in enumerate(sorted(files)[:20]):
-                size = f.stat().st_size if f.is_file() else 0
-                modified = datetime.fromtimestamp(f.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
-                type_char = "📄" if f.is_file() else "📁"
-                result += f"  {type_char} {f.name}  ({size} bytes)  [{modified}]\n"
-            if len(files) > 20:
-                result += f"  ... и ещё {len(files)-20}\n"
-            return result
-        else:
-            content = target.read_text(encoding='utf-8')[:2000]
-            result = f"\n📄 {path}:\n"
-            result += "-" * 50 + "\n"
-            result += content + "\n"
-            if target.stat().st_size > 2000:
-                result += "-" * 50 + "\n"
-                result += f"⚠️ Показаны первые 2000 из {target.stat().st_size} символов\n"
-            return result
+        output = f"\n📁 {path}:\n"
+        for item in result:
+            type_char = "📄" if not item['is_dir'] else "📁"
+            size = item.get('size', 0)
+            modified = item.get('modified', '')[:16]
+            output += f"  {type_char} {item['name']}  ({size} bytes)  [{modified}]\n"
+        return output
     
-    # ==================== АНАЛИЗ ФАЙЛОВ ====================
+    # ==================== РАБОТА С БИБЛИОТЕКОЙ ====================
     
-    def analyze_content(self, filepath):
-        """Проанализировать содержимое файла через LLM"""
-        try:
-            content = self.read_file(filepath)
-            if len(content) > 3000:
-                content = content[:3000] + "... (обрезано)"
-            
-            prompt = f"""Проанализируй этот файл и ответь строго в формате JSON:
-{{
-  "type": "actors|spheres|goals|values|mapping|code|config|docs|other",
-  "subtype": "конкретный тип файла",
-  "key_elements": ["список ключевых сущностей"],
-  "matches_ontology": ["какие элементы из онтологии найдены"],
-  "purpose": "краткое описание назначения (1 предложение)",
-  "actions": ["что можно с ним сделать"]
-}}
-
-Файл: {filepath}
-Содержимое:
-{content}
-"""
-            response = self.ask_ollama(prompt, temperature=0.1)
-            
-            # Извлекаем JSON из ответа
-            import json
-            json_match = re.search(r'```json\n(.*?)\n```', response, re.DOTALL)
-            if json_match:
-                response = json_match.group(1)
-            try:
-                data = json.loads(response)
-                return data
-            except:
-                return {"error": "Не удалось распарсить JSON", "raw": response[:500]}
-        except Exception as e:
-            return {"error": str(e)}
+    def library_list(self, path="."):
+        """Показать содержимое библиотеки"""
+        return self.list_files(f"library/{path}")
+    
+    def library_read(self, path):
+        """Прочитать из библиотеки"""
+        return self.read_file(f"library/{path}")
+    
+    def library_write(self, path, content, note_type=None):
+        """Записать в библиотеку"""
+        full_path = f"library/{path}"
+        if note_type and not path.startswith(note_type):
+            full_path = f"library/{note_type}/{path}"
+        return self.write_file(full_path, content)
+    
+    def library_search(self, query):
+        """Поиск по библиотеке (заглушка)"""
+        # TODO: реализовать через Qdrant
+        return f"Поиск '{query}' пока не реализован"
     
     # ==================== ИНТЕГРАЦИЯ С HIVEMIND ====================
     
@@ -349,7 +388,7 @@ class AIAssistant:
         except:
             status["docker"] = "недоступен"
         
-        # Проверка NATS (простейшая)
+        # Проверка NATS
         try:
             import socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -399,18 +438,10 @@ class AIAssistant:
         if target == "hivemind":
             status = self.check_hivemind_status()
             
-            # Проверим наличие критических сервисов
             prompt = f"""Ты — главный диагност лаборатории. 
 
 Статус HiveMind:
 {json.dumps(status, indent=2, ensure_ascii=False)}
-
-Также знаю, что в идеальной архитектуре должны быть:
-- classifier (есть)
-- embedder (нет)
-- linker (нет)
-- api-gateway (должен быть)
-- ui (должен быть)
 
 Проанализируй:
 1. Что работает?
@@ -511,14 +542,14 @@ class AIAssistant:
         # Если не похоже на известные команды — спрашиваем LLM
         prompt = f"""Ты — главный инженер лаборатории. У тебя есть доступ к:
 
-    1. Системе HiveMind (статус: {json.dumps(self.check_hivemind_status(), indent=2, ensure_ascii=False)})
-    2. Онтологии Astro (содержит: {list(self.ontology.keys())})
-    3. Файловой системе (проект: {self.project_dir})
+1. Системе HiveMind (статус: {json.dumps(self.check_hivemind_status(), indent=2, ensure_ascii=False)})
+2. Онтологии Astro (содержит: {list(self.ontology.keys())})
+3. Файловой системе (проект: {self.project_dir})
 
-    Запрос пользователя: {command}
+Запрос пользователя: {command}
 
-    Ответь подробно, по-русски. Если нужно выполнить какие-то действия — опиши их.
-    """
+Ответь подробно, по-русски. Если нужно выполнить какие-то действия — опиши их.
+"""
         return self.ask_ollama(prompt, temperature=0.3, max_tokens=2000)
     
     # ==================== ОСНОВНОЙ ЦИКЛ ОБРАБОТКИ ====================
@@ -555,16 +586,26 @@ class AIAssistant:
   /files                - показать файлы в проекте
   /read <файл>          - прочитать файл
   /write <файл>         - создать/перезаписать файл
-  /append <файл>        - добавить текст в конец файла
   /del <файл>           - удалить файл
-  /mkdir <папка>        - создать папку
+  /mv <источник> <цель> - переместить файл
   /ask <вопрос>         - задать вопрос локальной модели
   /code <описание>      - сгенерировать и сохранить код
   /analyze <файл>       - проанализировать файл
   /remember <текст>     - сохранить в память
   /search <запрос>      - поиск по памяти
+  
+  📚 Библиотека:
+  /lib list [путь]      - показать содержимое библиотеки
+  /lib read <путь>      - прочитать из библиотеки
+  /lib write <путь>     - записать в библиотеку
+  
+  🔬 Лаборатория:
   /lab ...              - лаборатория (сборка/диагностика/интеграция)
+  
+  🐝 HiveMind:
   /hivemind status      - статус HiveMind
+  /hivemind logs <сервис>- логи сервиса
+  
   /exit                  - выход
             """)
             return
@@ -591,9 +632,35 @@ class AIAssistant:
             print(self.write_file(filename, content))
             return
         
-        elif task.startswith("/append "):
-            filename = task[8:].strip()
-            print(f"Введите текст для добавления в {filename} (пустая строка + Enter для завершения):")
+        elif task.startswith("/del "):
+            filename = task[5:].strip()
+            confirm = input(f"Удалить {filename}? (y/n): ")
+            if confirm.lower() in ['y', 'yes', 'да']:
+                print(self.delete_file(filename))
+            return
+        
+        elif task.startswith("/mv "):
+            parts = task[4:].strip().split()
+            if len(parts) != 2:
+                print("Использование: /mv <источник> <цель>")
+                return
+            src, dst = parts
+            print(self.move_file(src, dst))
+            return
+        
+        elif task.startswith("/lib list"):
+            path = task[9:].strip() or "."
+            print(self.library_list(path))
+            return
+        
+        elif task.startswith("/lib read "):
+            path = task[10:].strip()
+            print(self.library_read(path))
+            return
+        
+        elif task.startswith("/lib write "):
+            path = task[11:].strip()
+            print(f"Введите содержимое (пустая строка + Enter для завершения):")
             lines = []
             while True:
                 line = input()
@@ -601,32 +668,7 @@ class AIAssistant:
                     break
                 lines.append(line)
             content = "\n".join(lines)
-            full_path = self.work_dir / filename
-            with open(full_path, 'a', encoding='utf-8') as f:
-                f.write(content + "\n")
-            print(f"Текст добавлен в {filename}")
-            return
-        
-        elif task.startswith("/del "):
-            filename = task[5:].strip()
-            full_path = self.work_dir / filename
-            if full_path.exists():
-                if full_path.is_file():
-                    confirm = input(f"Удалить {filename}? (y/n): ")
-                    if confirm.lower() in ['y', 'yes', 'да']:
-                        full_path.unlink()
-                        print(f"Файл {filename} удалён")
-                else:
-                    print(f"{filename} — это папка, используйте /rmdir (пока не реализовано)")
-            else:
-                print(f"Файл {filename} не найден")
-            return
-        
-        elif task.startswith("/mkdir "):
-            dirname = task[7:].strip()
-            full_path = self.work_dir / dirname
-            full_path.mkdir(parents=True, exist_ok=True)
-            print(f"Папка {dirname} создана")
+            print(self.library_write(path, content))
             return
         
         elif task.startswith("/ask "):
@@ -637,13 +679,13 @@ class AIAssistant:
             print(response)
             print("="*50)
             
-            save = input("Сохранить ответ? (y/n): ").lower()
+            save = input("Сохранить ответ в библиотеку? (y/n): ").lower()
             if save in ['y', 'yes', 'да']:
                 filename = input("Имя файла (Enter = answer.txt): ").strip()
                 if not filename:
                     filename = f"answer_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-                self.write_file(filename, f"Вопрос: {question}\n\n{response}")
-                print(f"Ответ сохранён в {filename}")
+                self.library_write(f"notes/fleeting/{filename}", f"Вопрос: {question}\n\n{response}")
+                print(f"Ответ сохранён в библиотеку")
             
             self.remember_query(question, response)
             return
@@ -696,29 +738,24 @@ class AIAssistant:
         
         elif task.startswith("/analyze "):
             filename = task[9:].strip()
-            full_path = self.work_dir / filename
-            if not full_path.exists():
-                print(f"Файл {filename} не найден")
+            content = self.read_file(filename)
+            if content.startswith("Ошибка"):
+                print(content)
                 return
             
             print(f"🔬 Анализирую {filename}...")
-            analysis = self.analyze_content(filename)
             
-            if "error" in analysis:
-                print(f"❌ Ошибка: {analysis['error']}")
-                if "raw" in analysis:
-                    print("\nСырой ответ модели:")
-                    print(analysis["raw"])
-            else:
-                print("\n📊 РЕЗУЛЬТАТ АНАЛИЗА:")
-                print(f"Тип: {analysis.get('type', '?')} / {analysis.get('subtype', '?')}")
-                print(f"Назначение: {analysis.get('purpose', '?')}")
-                if analysis.get('key_elements'):
-                    print(f"Ключевые элементы: {', '.join(analysis['key_elements'])}")
-                if analysis.get('matches_ontology'):
-                    print(f"Совпадает с онтологией: {', '.join(analysis['matches_ontology'])}")
-                if analysis.get('actions'):
-                    print(f"Что можно сделать: {', '.join(analysis['actions'])}")
+            prompt = f"""Проанализируй этот текст и определи:
+1. Тип (концепция/методология/инструмент/кейс/идея)
+2. Ключевые понятия
+3. Связи с другими идеями
+
+Текст:
+{content[:2000]}...
+"""
+            analysis = self.ask_ollama(prompt, temperature=0.3)
+            print("\n📊 АНАЛИЗ:")
+            print(analysis)
             
             self.remember_file(filename, analysis)
             return
@@ -760,6 +797,23 @@ class AIAssistant:
             for s, state in status.get('services', {}).items():
                 print(f"  {s}: {state}")
             print(f"\n📨 NATS: {'✅' if status.get('nats') else '❌'}")
+            return
+        
+        elif task.startswith("/hivemind logs "):
+            service = task[15:].strip()
+            try:
+                result = subprocess.run(
+                    ["docker", "logs", f"hivemind-{service}-1", "--tail", "50"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                print(result.stdout)
+                if result.stderr:
+                    print("Ошибки:")
+                    print(result.stderr)
+            except Exception as e:
+                print(f"Ошибка: {e}")
             return
         
         elif task == "/exit":
